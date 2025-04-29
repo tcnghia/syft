@@ -22,8 +22,8 @@ func CreateSBOMFromFS(ctx context.Context, filesystem fs.FS, config *CreateSBOMC
 	src, err := fssource.New(fssource.Config{
 		Filesystem: filesystem,
 		Base:       "/",
-		Exclude:    config.SourceConfig.Exclusions,
-		Alias:      config.SourceConfig.Alias,
+		Exclude:    source.ExcludeConfig{}, // Default empty exclusions
+		Alias:      source.Alias{},         // Default empty alias
 	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to create FS source: %w", err)
@@ -42,9 +42,9 @@ func GetSourceFromFS(ctx context.Context, filesystem fs.FS, cfg *GetSourceConfig
 	// Create a source provider for the fs.FS
 	provider := fssource.NewSourceProvider(
 		filesystem,
-		cfg.SourceProviderConfig.Exclusions,
+		cfg.SourceProviderConfig.Exclude,
 		cfg.SourceProviderConfig.Alias,
-		"",
+		cfg.SourceProviderConfig.BasePath,
 	)
 
 	// Create the source

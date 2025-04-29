@@ -6,16 +6,15 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	stereoscopeFile "github.com/anchore/stereoscope/pkg/file"
 	"github.com/anchore/stereoscope/pkg/filetree"
 	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/syft/file"
-	"github.com/anchore/syft/syft/internal/fileresolver"
 	"github.com/anchore/syft/syft/source"
 )
 
@@ -105,17 +104,16 @@ func (r *fsResolver) buildIndex(exclude source.ExcludeConfig) (filetree.Reader, 
 		}
 
 		// Create metadata for the file
+		fileType := stereoscopeFile.TypeFromMode(info.Mode())
+
 		metadata := stereoscopeFile.Metadata{
 			Path:     path,
-			Mode:     info.Mode(),
-			Type:     stereoscopeFile.TypeFromMode(info.Mode()),
-			MIMEType: "",
-			Size:     info.Size(),
-			ModTime:  info.ModTime().Unix(),
+			Type:     fileType,
+			FileInfo: info,
 		}
 
 		// Add to index
-		index.Add(*ref, stereoscopeFile.NewCatalogEntry(path, metadata))
+		index.Add(*ref, metadata)
 
 		return nil
 	})
@@ -277,7 +275,7 @@ func (r *fsResolver) AllLocations(ctx context.Context) <-chan file.Location {
 func (r *fsResolver) FileMetadataByLocation(location file.Location) (file.Metadata, error) {
 	entry, err := r.index.Get(location.Reference())
 	if err != nil {
-		return file.Metadata{}, fmt.Errorf("location: %+v : %w", location, fs.ErrNotExist)
+		return file.Metadata{}, fmt.Errorf("location: %+v : %w", location, os.ErrNotExist)
 	}
 
 	return entry.Metadata, nil

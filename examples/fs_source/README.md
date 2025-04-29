@@ -4,11 +4,11 @@ This example demonstrates how to use Syft as a library with Go's `fs.FS` interfa
 
 ## How to Use fs.FS with Syft
 
-There are two primary ways to use Syft with an `fs.FS` implementation:
+There are three primary ways to use Syft with an `fs.FS` implementation, all demonstrated in this example:
 
-### Method 1: Use CreateSBOMFromFS (Direct)
+### Method 1: Use CreateSBOMFromFS with Custom fs.FS
 
-The most direct way is to call `syft.CreateSBOMFromFS` with your `fs.FS` implementation:
+The most direct way is to call `syft.CreateSBOMFromFS` with your custom `fs.FS` implementation:
 
 ```go
 import (
@@ -16,18 +16,13 @@ import (
     "io/fs"
     
     "github.com/anchore/syft/syft"
-    "github.com/anchore/syft/syft/source"
 )
 
-// Your fs.FS implementation
-filesystem := myFSImplementation{}
+// Your custom fs.FS implementation
+filesystem := customFSImplementation{}
 
 // Configure options
 config := syft.DefaultCreateSBOMConfig()
-config.SourceConfig.Alias = source.Alias{
-    Name:    "my-project",
-    Version: "1.0.0",
-}
 
 // Create SBOM directly from the filesystem
 sbom, err := syft.CreateSBOMFromFS(context.Background(), filesystem, config)
@@ -36,7 +31,7 @@ if err != nil {
 }
 ```
 
-### Method 2: Get Source from fs.FS
+### Method 2: Get Source from fs.FS then Create SBOM
 
 If you need more control over the source creation, you can use `syft.GetSourceFromFS` to create a source object:
 
@@ -50,14 +45,14 @@ import (
 )
 
 // Your fs.FS implementation
-filesystem := myFSImplementation{}
+filesystem := customFSImplementation{}
 
 // Configure the source
 sourceConfig := syft.DefaultGetSourceConfig()
-sourceConfig.SourceProviderConfig.Alias = source.Alias{
+sourceConfig.SourceProviderConfig.WithAlias(source.Alias{
     Name:    "my-project",
     Version: "1.0.0",
-}
+})
 
 // Get a source from the filesystem
 src, err := syft.GetSourceFromFS(context.Background(), filesystem, sourceConfig)
@@ -72,38 +67,66 @@ if err != nil {
 }
 ```
 
-## Custom fs.FS Implementation
+### Method 3: Using Standard Library os.DirFS
 
-You can use any implementation of `fs.FS`, such as the `os.DirFS` function, embedded files with `embed.FS`, or your own custom implementation:
+You can use the standard library's `os.DirFS` function to create an `fs.FS` from a directory:
 
 ```go
-// Using os.DirFS
-dirFS := os.DirFS("/path/to/directory")
-sbom, err := syft.CreateSBOMFromFS(context.Background(), dirFS, nil)
+import (
+    "context"
+    "os"
+    
+    "github.com/anchore/syft/syft"
+)
 
+// Use standard library os.DirFS
+filesystem := os.DirFS("/path/to/directory")
+
+// Create SBOM from the filesystem
+sbom, err := syft.CreateSBOMFromFS(context.Background(), filesystem, nil)
+if err != nil {
+    // handle error
+}
+```
+
+## Other fs.FS Implementations
+
+The `fs.FS` interface is very versatile and can be implemented in many ways:
+
+```go
 // Using embedded files
 //go:embed resources
 var embeddedFiles embed.FS
 sbom, err := syft.CreateSBOMFromFS(context.Background(), embeddedFiles, nil)
 
-// Custom implementation
-type myFS struct {
-    // your implementation
+// Using in-memory file system
+memFS := fstest.MapFS{
+    "file.txt": &fstest.MapFile{
+        Data: []byte("content"),
+        Mode: 0644,
+    },
 }
+sbom, err := syft.CreateSBOMFromFS(context.Background(), memFS, nil)
 
-func (m myFS) Open(name string) (fs.File, error) {
-    // your implementation
-}
-
-myFilesystem := myFS{}
-sbom, err := syft.CreateSBOMFromFS(context.Background(), myFilesystem, nil)
+// Using a zip file as a filesystem
+zipFile, _ := zip.OpenReader("archive.zip")
+defer zipFile.Close()
+sbom, err := syft.CreateSBOMFromFS(context.Background(), zipFile, nil)
 ```
 
 ## Running This Example
 
-1. Edit the `main.go` file to point to a directory of your choice
-2. Run the example: `go run main.go /path/to/your/directory`
-3. Check the generated `sbom.json` file
+1. Run the example pointing to a directory of your choice:
+   ```
+   go run main.go /path/to/your/directory
+   ```
+
+2. Check the generated SBOM files:
+   - `method1-sbom.json` - Created using direct CreateSBOMFromFS with custom fs.FS
+   - `method2-sbom.json` - Created using source from GetSourceFromFS
+   - `method3-sbom.json` - Created using standard library os.DirFS
+
+If no argument is provided, the example will use `/tmp` as the default directory.
 
 ## Advantages of Using fs.FS
 
@@ -111,3 +134,4 @@ sbom, err := syft.CreateSBOMFromFS(context.Background(), myFilesystem, nil)
 - **In-memory analysis**: Generate SBOMs from in-memory file systems without creating temporary files
 - **Embedded files**: Directly analyze embedded files in your Go applications
 - **Virtual filesystems**: Work with custom virtual filesystem implementations
+- **No temporary files**: Process files directly without creating temporary copies on disk
